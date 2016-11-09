@@ -1,6 +1,7 @@
 #ifndef _PROJECT_H
 #define _PROJECT_H
-// we are dealing with images so lets struct our pixel format
+
+
 typedef struct // use chars to save memory?
 {
 	int red;
@@ -8,12 +9,19 @@ typedef struct // use chars to save memory?
 	int blue;
 	// include? int alpha;
 } pixel;
+
+union Endian //our png image is big endian, perhaps our compiler is little endian
+	{
+		char asstring[4];
+		int asnumber;
+	} endian;
+
 //BEGIN FUNCTION DEFS
 
 void getdimensions(FILE *image, int *retvalue); // lets find the IDHR of our png file and read it to get dimensions
 void findwell(/* args */); // use circular edge detection to find the well plates
 void greyscaleimage(pixel **image); /* for this we need our image in grey scale */
-
+void swaplocations(char *array); // swap our big endian number to a little endian number
 //END FUNCTION DEFS
 
 void getdimensions(FILE *image, int *retvalue) //return x, y dimensions if this matches what we expect, NULL otherwise
@@ -22,42 +30,48 @@ void getdimensions(FILE *image, int *retvalue) //return x, y dimensions if this 
 	strcpy(buffer, "00000000000000000000000000");
 	char *IHDR="IHDR";
 	int bytes_read=0;
-	//while((strstr(buffer, IHDR) == NULL))
-	//{
+	while((strstr(buffer, IHDR) == NULL))
+	{
 		fgets(buffer, 100, image);
-		//if ((strstr(buffer, IHDR) != NULL)
-       // {
-          //  break;
-      //  }
-		printf("%s\n", buffer);
-	//}
+		while (buffer[0]=='\0')
+		{
+			buffer=buffer+sizeof(char); //our buffer might have a line begining with HEX 00 ie \0
+		}
+	}
+    
 	//lets make a string with our header in :D
+	int skippedchars=0;
 	char *tempheader=strstr(buffer, IHDR);
 	tempheader+=4; //move over IHDR into the buffer
-	// causes SIGSEV - trying to overwrite ROM *(header+14)='\0'; // null terminate so we have a complete header
-	char *header=malloc(97);
-	strcpy(header, tempheader);
-	header[13]='\0';
-	printf("%s\n", header);
-	int x,y;
 	int i=0;
-	scanf(header, "%d%d", &x, &y);
-	/*char *x_char=malloc(sizeof(char)*5);
-	x_char[4]='\0';
 	for (i=0; i<4; i++)
-    {
-        x_char[i]=header[i];
-    }
-    x=(int)x_char;
-    for (i=4;i<8; i++)
-    {
-        x_char[i]=header[i];
-    }
-    y=(int)x_char; */
-    retvalue[0]=x;
-    retvalue[1]=y;
-	// free(buffer); //can we call without breaking header?
+	{
+		endian.asstring[i]=tempheader[0]; //read our big endian png dimensions
+		tempheader+=sizeof(char);
+	}
+ 	swaplocations(endian.asstring); // turn it into little endian
+ 	int x,y;
+ 	x=endian.asnumber; // assign our return value
+	for (i=0; i<4; i++)
+	{
+		endian.asstring[i]=tempheader[0];
+		tempheader+=sizeof(char);
+	}
+	swaplocations(endian.asstring);
+	y=endian.asnumber;
+    	retvalue[0]=x;
+    	retvalue[1]=y;
 }
 
+void swaplocations(char *array)
+{
+	char temp;
+	temp=array[0];
+	array[0]=array[3];
+	array[3]=temp;
+	temp=array[1];
+	array[1]=array[2];
+	array[2]=temp;
+}
 
 #endif

@@ -15,7 +15,7 @@ const char *OUTFILE="output.txt";
 // MAIN
 int main (int argc, char **argv)
 {
-    char *array=malloc(100);
+    char *firstidatoverrun=malloc(100);
 	FILE *image = fopen(INPUTIMAGE, "rb");
 	if (image == NULL)
 	{
@@ -23,10 +23,20 @@ int main (int argc, char **argv)
 		return -1;
 	}
 	int dimensions[4];
-	int *firstidatlength, *array_len;
+	int firstidatlength, array_len;
 	getheader(image, dimensions);
 	printf("x = %d, y = %d, depth = %d, mode = %d\n", dimensions[0], dimensions[1], dimensions[2], dimensions[3]);
 	// READ FILE UNTIL WE FIND IDAT
-    idatread(image, array, firstidatlength, array_len);
+    idatread(image, firstidatoverrun, &firstidatlength, &array_len);
+    printf ("IDATlen = %d\n", firstidatlength);
+    printf ("array_len = %d\n", array_len);
+    char *IDATCHUNK=malloc(sizeof(char)*((firstidatlength)+1)); // dynamically work with our memory
+    char *temp=malloc(sizeof(char)*(firstidatlength-array_len));
+    strcpy(IDATCHUNK, firstidatoverrun);
+    //printf("IDATCHUNK = %s", IDATCHUNK);
+    fgets(temp, firstidatlength-array_len-4, image);//read the rest of IDAT chunk leaving off the crc at the end
+    strcpy(IDATCHUNK, temp);
+    free(temp);
+    //printf("IDATCHUNK = %s", IDATCHUNK);
 	return 0;
 }

@@ -109,10 +109,10 @@ void idatread(FILE *image, char *array, int *length, int *array_len) //pass back
     int movedforward=0;
     fgets(buff, 40, image);
     int endofstring=0;
-    printf("Passing into idatread\n");
+   // printf("Passing into idatread\n");
     for (i=0; i<40; i++)
     {
-        printf("byte %d is 0x%x (%c)\n", i, buff[i], buff[i]);
+       // printf("byte %d is 0x%x (%c)\n", i, buff[i], buff[i]);
         if (buff[i]=='I')
         {
             printf("found 'I' at pos %d", i);
@@ -120,7 +120,7 @@ void idatread(FILE *image, char *array, int *length, int *array_len) //pass back
 
             if ((i+1)<40)
             {
-                if (buff[i+1]=='D') //just match ID
+                if (buff[i+1]=='D') //just match ID of IDAT
                 {
                     switch (i)
                     {
@@ -159,20 +159,25 @@ void idatread(FILE *image, char *array, int *length, int *array_len) //pass back
                         }
                         default:
                         {
-
+                      //      printf("default behaviour\n");
                             endian.asstring[0]=buff[i-4];
                             endian.asstring[1]=buff[i-3];
                             endian.asstring[2]=buff[i-2];
                             endian.asstring[3]=buff[i-1];
+                      //       printf("default behaviour complete\n");
+                            break;
                         }
                     }
                     overruncounter=40-i;
                     if (overruncounter>0)
                     {
+                      //  printf("overruncounter = %d\n", overruncounter);
                         char *IDATCHUNK=malloc(sizeof(char)*overruncounter);
-                        *array_len=overruncounter;
+                       *array_len=overruncounter;
+           //            printf("array_len in header = %d\n  ", *array_len);
                         for (x=0; x<overruncounter; x++)
                         {
+                      //      printf("putting data into IDAT overrun\n");
                             IDATCHUNK[x]=buff[i+4+x];
                         }
                         strcpy(array, IDATCHUNK);
@@ -192,8 +197,8 @@ void idatread(FILE *image, char *array, int *length, int *array_len) //pass back
                 }
             }
             swaplocations(endian.asstring);
-            length=&(endian.asnumber);
-           // printf("Length of IDAT CHUNK is %d\n", *length);
+            *length=endian.asnumber;
+            //printf("Length of IDAT CHUNK is %d\n", *length);
             break;
         }
 

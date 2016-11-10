@@ -26,6 +26,7 @@ int main (int argc, char **argv)
 		printf("Could not open image.\n");
 		return -1;
 	}
+	int bytesread=0;
 	int dimensions[4];
 	int firstidatlength, array_len;
 	getheader(image, dimensions);
@@ -33,29 +34,36 @@ int main (int argc, char **argv)
 	// READ FILE UNTIL WE FIND IDAT
     idatread(image, firstidatoverrun, &firstidatlength, &array_len);
     printf ("IDATlen = %d\n", firstidatlength);
-    printf ("array_len = %d\n", array_len);
+    printf ("array_len = %d\nIDATOVERRUN =", array_len);
+   for (z=0; z<array_len; z++)
+   {
+        printf("0x%X\n", firstidatoverrun[z]);
+   }
+
+    printf("\n");
     unsigned char *IDATCHUNK=malloc(sizeof(char)*((firstidatlength))); // dynamically work with our memory
     unsigned char *inflatechunk=malloc(sizeof(char)*((firstidatlength)));
-    char *temp=malloc(sizeof(char)*(firstidatlength-array_len));
-    //strcpy(IDATCHUNK, firstidatoverrun);
+    unsigned char *temp=malloc(sizeof(char)*(firstidatlength-array_len));
     for (i=0; i<array_len; i++) //do this instead of strcpy so we copy any null bytes
     {
         IDATCHUNK[i]=firstidatoverrun[i];
     }
-    //printf("IDATCHUNK = %s", IDATCHUNK);
-    fgets(temp, firstidatlength-array_len-4, image);//read the rest of IDAT chunk leaving off the crc at the end
-    //strcpy(IDATCHUNK, temp);
-    for (i=0; i<firstidatlength; i++) //do this instead of strcpy so we copy any null bytes
+
+
+    //read the rest of IDAT chunk leaving off the crc at the end
+    fread(temp, 1, (firstidatlength-array_len), image);
+    printf("first byte of IDAT = 0x%X\n", temp[0]);
+    for (i=0; i<(firstidatlength-array_len); i++)
     {
         IDATCHUNK[i+array_len]=temp[i];
     }
+    printf("i = %d\n", i);
     free(temp);
-    //printf("IDATCHUNK = %s", IDATCHUNK);
     // inflate zlib compressed data: stolen from http://www.zlib.net/zlib_how.html
-    //int success=inf(IDATCHUNK, inflatechunk, firstidatlength);
+
     int success=inflate_mod(IDATCHUNK, firstidatlength, inflatechunk, firstidatlength);
     pixel pixelarray[dimensions[1]][dimensions[2]];
-    int bytesread=0; // populate our pixel array with the first IDAT chunk
+    bytesread=0; // populate our pixel array with the first IDAT chunk
     y=0;
     do
     {
@@ -95,16 +103,20 @@ int main (int argc, char **argv)
         for (i=0; i<4; i++) //skip over crc
         {
             discarded=fgetc(image);
+            printf("discarded = %c (0x%X)\n", discarded, discarded);
         }
+        //printf("discarded the 4 crc bytes\n");
         for (i=0; i<4; i++) //grab the 4 length bytes
         {
             endian.asstring[i]=fgetc(image);
         }
         swaplocations(endian.asstring); //length to little endian format
+        printf("nth chunk is %d long\n", endian.asnumber);
         if (endian.asnumber==firstidatlength)//is the next IDAT 0x8000 long? ie the maximum?
         {
+            printf("IDAT 2 is the same length as IDAT 1\n");
             bytesread=0;
-            fgets(IDATCHUNK, firstidatlength, image); // get the next IDAT chunk
+            fread(IDATCHUNK, 1, firstidatlength, image); // get the next IDAT chunk
             success=inflate_mod(IDATCHUNK, firstidatlength, inflatechunk, firstidatlength);
             while (bytesread<firstidatlength) // populate the next part of the array
             {
@@ -147,7 +159,7 @@ int main (int argc, char **argv)
             unsigned char *lastidat=malloc(sizeof(char)*endian.asnumber);
             unsigned char *inflatechunk=malloc(sizeof(char)*endian.asnumber);
             bytesread=0;
-            fgets(lastidat, endian.asnumber, image); // get the next IDAT chunk
+            fread(lastidat, 1, endian.asnumber, image); // get the next IDAT chunk
             success=inflate_mod(IDATCHUNK, firstidatlength, inflatechunk, firstidatlength);
             while (bytesread<firstidatlength) // populate the next part of the array
             {

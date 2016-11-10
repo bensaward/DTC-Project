@@ -98,11 +98,11 @@ void idatread(FILE *image, char *array, int *length, int *array_len) //pass back
 {
     int i=0; int x=0;
     char *IDAT="IDAT";
-    char *buff=malloc(sizeof(char)*41);
+    char *buff=malloc(sizeof(char)*40);
     char *tempholder=malloc(sizeof(char)*4);
     int overruncounter=0; //count how far into the IDAT buffer we ran and hold those bytes
     int movedforward=0;
-    fgets(buff, 40, image);
+    fread(buff, 1, 40, image);
     int endofstring=0;
    // printf("Passing into idatread\n");
     for (i=0; i<40; i++)
@@ -163,19 +163,19 @@ void idatread(FILE *image, char *array, int *length, int *array_len) //pass back
                             break;
                         }
                     }
-                    overruncounter=40-i;
+                    overruncounter=36-i;
                     if (overruncounter>0)
                     {
                       //  printf("overruncounter = %d\n", overruncounter);
-                        char *IDATCHUNK=malloc(sizeof(char)*overruncounter);
+                        //char *IDATCHUNK=malloc(sizeof(char)*overruncounter);
                        *array_len=overruncounter;
            //            printf("array_len in header = %d\n  ", *array_len);
                         for (x=0; x<overruncounter; x++)
                         {
                       //      printf("putting data into IDAT overrun\n");
-                            IDATCHUNK[x]=buff[i+4+x];
+                            array[x]=buff[i+4+x];
                         }
-                        strcpy(array, IDATCHUNK);
+                        //strcpy(array, IDATCHUNK);
                     }
 
                 }
@@ -204,7 +204,7 @@ void idatread(FILE *image, char *array, int *length, int *array_len) //pass back
             tempholder[2]=buff[38];
             tempholder[3]=buff[39];
             i=0;
-            fgets(buff, 40, image);
+            fread(buff, 1, 40, image);
         }
     }
 }

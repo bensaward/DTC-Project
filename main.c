@@ -98,7 +98,7 @@ int main (int argc, char **argv)
         for (i=0; i<4; i++) //skip over crc
         {
             discarded=fgetc(image);
-            printf("discarded = %c (0x%X)\n", discarded, discarded);
+           // printf("discarded = %c (0x%X)\n", discarded, discarded);
         }
         //printf("discarded the 4 crc bytes\n");
         for (i=0; i<4; i++) //grab the 4 length bytes
@@ -108,7 +108,7 @@ int main (int argc, char **argv)
          for (i=0; i<4; i++) //skip over IDAT
         {
             discarded=fgetc(image);
-            printf("discarded = %c (0x%X)\n", discarded, discarded);
+          //  printf("discarded = %c (0x%X)\n", discarded, discarded);
         }
         swaplocations(endian.asstring); //length to little endian format
         printf("nth chunk is %d long\n", endian.asnumber);
@@ -119,7 +119,7 @@ int main (int argc, char **argv)
 
             fread(IDATCHUNK, 1, firstidatlength, image); // get the next IDAT chunk
             success=inflate_mod(IDATCHUNK, firstidatlength, inflatechunk, firstidatlength);
-            printf("x = %d, y = %d\n", x, y);
+
             while (bytesread<firstidatlength) // populate the next part of the array
             {
                 while (x<(dimensions[0]*3)) // our x and y is saved from last time
@@ -164,8 +164,8 @@ int main (int argc, char **argv)
             unsigned char *inflatechunk=malloc(sizeof(char)*endian.asnumber);
             bytesread=0;
             fread(lastidat, 1, endian.asnumber, image); // get the next IDAT chunk
-            success=inflate_mod(IDATCHUNK, firstidatlength, inflatechunk, firstidatlength);
-            while (bytesread<firstidatlength) // populate the next part of the array
+            success=inflate_mod(IDATCHUNK, endian.asnumber, inflatechunk, endian.asnumber);
+            while (bytesread<endian.asnumber) // populate the next part of the array
             {
                 while (x<(dimensions[0]*3)) // our x and y is saved from last time
                 {
@@ -195,7 +195,7 @@ int main (int argc, char **argv)
                     }
                     if (bytesread>=firstidatlength) {break;}
                 }
-                if(bytesread<firstidatlength) {y+=1;}
+                if(bytesread<firstidatlength) {y+=1; x=0;}
             }
             free(lastidat);
             free(inflatechunk); //done garbage collection

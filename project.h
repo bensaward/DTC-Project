@@ -1,12 +1,6 @@
 #ifndef _PROJECT_H
 #define _PROJECT_H
-/*
-Bit depth:          1 byte
-   Color type:         1 byte
-   Compression method: 1 byte
-   Filter method:      1 byte
-   Interlace method:   1 byte
-*/
+
 #define CHUNK 16384
 typedef struct // use chars to save memory?
 {
@@ -30,12 +24,13 @@ union Endian //our png image is big endian, perhaps our compiler is little endia
 	} endian;
 
 //BEGIN FUNCTION DEFS
-int inf(FILE *source, FILE *dest); // 11 December 2005  Mark Adler (http://www.zlib.net/zpipe.c)
+int inf(char *source, char *dest, int size_source); //(FILE *source, FILE *dest) // 11 December 2005  Mark Adler (http://www.zlib.net/zpipe.c)
 void getheader(FILE *image, int *retvalue); // lets find the IDHR of our png file and read it to get dimensions
 void findwell(/* args */); // use circular edge detection to find the well plates
 void greyscaleimage(pixel **image); /* for this we need our image in grey scale */
 void swaplocations(char *array); // swap our big endian number to a little endian number
 void idatread(FILE *image, char *array, int *length, int *array_len); //read a block of the idat
+int inflate_mod(const void *src, int srcLen, void *dst, int dstLen);
 //END FUNCTION DEFS
 
 void getheader(FILE *image, int *retvalue) //return x, y dimensions if this matches what we expect, NULL otherwise
@@ -214,8 +209,9 @@ void idatread(FILE *image, char *array, int *length, int *array_len) //pass back
     }
 }
 
-int inf(FILE *source, FILE *dest) // 11 December 2005  Mark Adler (http://www.zlib.net/zpipe.c)
-{
+int inf(char *source, char *dest, int size_source) // 11 December 2005  Mark Adler (http://www.zlib.net/zpipe.c)
+{ //modified to take char * args instead of FILE, should be faster this way
+    int i=0;
     int ret;
     unsigned have;
     z_stream strm;
@@ -234,14 +230,20 @@ int inf(FILE *source, FILE *dest) // 11 December 2005  Mark Adler (http://www.zl
 
     /* decompress until deflate stream ends or end of file */
     do {
-        strm.avail_in = fread(in, 1, CHUNK, source);
+        /*strm.avail_in = fread(in, 1, CHUNK, source);
         if (ferror(source)) {
-            (void)inflateEnd(&strm);
+            (void)inflateEnd(&strm); modified to take char * input instead of FILE
             return Z_ERRNO;
-        }
-        if (strm.avail_in == 0)
-            break;
-        strm.next_in = in;
+        }*/
+        strm.avail_in=size_source;
+       /* for (i=0; i<size_source; i++)
+        {
+             in[i]=source[i]; // take char * instead of FILE
+        } */
+
+        //if (strm.avail_in == 0)
+           // break;
+        strm.next_in = source;
 
         /* run inflate() on input until output buffer not full */
         do {
@@ -257,11 +259,12 @@ int inf(FILE *source, FILE *dest) // 11 December 2005  Mark Adler (http://www.zl
                 (void)inflateEnd(&strm);
                 return ret;
             }
-            have = CHUNK - strm.avail_out;
+            /*have = CHUNK - strm.avail_out;
             if (fwrite(out, 1, have, dest) != have || ferror(dest)) {
                 (void)inflateEnd(&strm);
                 return Z_ERRNO;
-            }
+            }*/
+            dest=out;
         } while (strm.avail_out == 0);
 
         /* done when inflate() says it's done */
@@ -271,6 +274,39 @@ int inf(FILE *source, FILE *dest) // 11 December 2005  Mark Adler (http://www.zl
     (void)inflateEnd(&strm);
     return ret == Z_STREAM_END ? Z_OK : Z_DATA_ERROR;
 }
+int inflate_mod(const void *src, int srcLen, void *dst, int dstLen) { //stolen from stackoverflow
+    //URL = http://stackoverflow.com/questions/4901842/in-memory-decompression-with-zlib
+    z_stream strm  = {0};
+    strm.total_in  = strm.avail_in  = srcLen;
+    strm.total_out = strm.avail_out = dstLen;
+    strm.next_in   = (Bytef *) src;
+    strm.next_out  = (Bytef *) dst;
 
+    strm.zalloc = Z_NULL;
+    strm.zfree  = Z_NULL;
+    strm.opaque = Z_NULL;
+
+    int err = -1;
+    int ret = -1;
+
+    err = inflateInit2(&strm, (15 + 32)); //15 window bits, and the +32 tells zlib to to detect if using gzip or zlib
+    if (err == Z_OK) {
+        err = inflate(&strm, Z_FINISH);
+        if (err == Z_STREAM_END) {
+            ret = strm.total_out;
+        }
+        else {
+             inflateEnd(&strm);
+             return err;
+        }
+    }
+    else {
+        inflateEnd(&strm);
+        return err;
+    }
+
+    inflateEnd(&strm);
+    return ret;
+}
 
 #endif

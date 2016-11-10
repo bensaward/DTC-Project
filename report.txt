@@ -4,6 +4,6 @@ Many issues presented within the project:
 		- first looked into seeing how the IHDR chunk of the image works
 			- contains crucial information such as width, height and formatting of pixels
 			- do we need to deal with an alpha channel?
-			- IDHR has a fixed length, find where it resides in the image and then seek to it? (http://www.libpng.org/pub/png/spec/1.2/PNG-Chunks.html)
+				- IDHR has a fixed length, find where it resides in the image and then seek to it? (http://www.libpng.org/pub/png/spec/1.2/PNG-Chunks.html)
 			- encountered problems with reading directly from binary file because of all the HEX 0x00 (ie \0) characters
 		- how should we represent the pixels? int is the true data type but char can save a lot of RAM!

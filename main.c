@@ -1,8 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <zlib.h>
+#include <assert.h>
 //#include </auto/dtchome/sawardb/coding/project/project.h>
 #include </home/ben/Documents/Oxford/DTP/project/DTC-Project/project.h>
+
 
 // BEGIN CONSTS
 const char *INPUTIMAGE="image-1.png";
@@ -15,6 +18,7 @@ const char *OUTFILE="output.txt";
 // MAIN
 int main (int argc, char **argv)
 {
+    int i,x,y,z;
     char *firstidatoverrun=malloc(100);
 	FILE *image = fopen(INPUTIMAGE, "rb");
 	if (image == NULL)
@@ -32,11 +36,21 @@ int main (int argc, char **argv)
     printf ("array_len = %d\n", array_len);
     char *IDATCHUNK=malloc(sizeof(char)*((firstidatlength)+1)); // dynamically work with our memory
     char *temp=malloc(sizeof(char)*(firstidatlength-array_len));
-    strcpy(IDATCHUNK, firstidatoverrun);
+    //strcpy(IDATCHUNK, firstidatoverrun);
+    for (i=0; i<array_len; i++) //do this instead of strcpy so we copy any null bytes
+    {
+        IDATCHUNK[i]=firstidatoverrun[i];
+    }
     //printf("IDATCHUNK = %s", IDATCHUNK);
     fgets(temp, firstidatlength-array_len-4, image);//read the rest of IDAT chunk leaving off the crc at the end
-    strcpy(IDATCHUNK, temp);
+    //strcpy(IDATCHUNK, temp);
+    for (i=0; i<firstidatlength; i++) //do this instead of strcpy so we copy any null bytes
+    {
+        IDATCHUNK[i+array_len]=temp[i];
+    }
     free(temp);
     //printf("IDATCHUNK = %s", IDATCHUNK);
+    /* inflate zlib compressed data: stolen from http://www.zlib.net/zlib_how.html */
+
 	return 0;
 }

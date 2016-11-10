@@ -7,7 +7,7 @@ Bit depth:          1 byte
    Filter method:      1 byte
    Interlace method:   1 byte
 */
-
+#define CHUNK 16384
 typedef struct // use chars to save memory?
 {
 	int red;
@@ -30,7 +30,7 @@ union Endian //our png image is big endian, perhaps our compiler is little endia
 	} endian;
 
 //BEGIN FUNCTION DEFS
-
+int inf(FILE *source, FILE *dest); // 11 December 2005  Mark Adler (http://www.zlib.net/zpipe.c)
 void getheader(FILE *image, int *retvalue); // lets find the IDHR of our png file and read it to get dimensions
 void findwell(/* args */); // use circular edge detection to find the well plates
 void greyscaleimage(pixel **image); /* for this we need our image in grey scale */
@@ -212,6 +212,64 @@ void idatread(FILE *image, char *array, int *length, int *array_len) //pass back
             fgets(buff, 40, image);
         }
     }
+}
+
+int inf(FILE *source, FILE *dest) // 11 December 2005  Mark Adler (http://www.zlib.net/zpipe.c)
+{
+    int ret;
+    unsigned have;
+    z_stream strm;
+    unsigned char in[CHUNK];
+    unsigned char out[CHUNK];
+
+    /* allocate inflate state */
+    strm.zalloc = Z_NULL;
+    strm.zfree = Z_NULL;
+    strm.opaque = Z_NULL;
+    strm.avail_in = 0;
+    strm.next_in = Z_NULL;
+    ret = inflateInit(&strm);
+    if (ret != Z_OK)
+        return ret;
+
+    /* decompress until deflate stream ends or end of file */
+    do {
+        strm.avail_in = fread(in, 1, CHUNK, source);
+        if (ferror(source)) {
+            (void)inflateEnd(&strm);
+            return Z_ERRNO;
+        }
+        if (strm.avail_in == 0)
+            break;
+        strm.next_in = in;
+
+        /* run inflate() on input until output buffer not full */
+        do {
+            strm.avail_out = CHUNK;
+            strm.next_out = out;
+            ret = inflate(&strm, Z_NO_FLUSH);
+            assert(ret != Z_STREAM_ERROR);  /* state not clobbered */
+            switch (ret) {
+            case Z_NEED_DICT:
+                ret = Z_DATA_ERROR;     /* and fall through */
+            case Z_DATA_ERROR:
+            case Z_MEM_ERROR:
+                (void)inflateEnd(&strm);
+                return ret;
+            }
+            have = CHUNK - strm.avail_out;
+            if (fwrite(out, 1, have, dest) != have || ferror(dest)) {
+                (void)inflateEnd(&strm);
+                return Z_ERRNO;
+            }
+        } while (strm.avail_out == 0);
+
+        /* done when inflate() says it's done */
+    } while (ret != Z_STREAM_END);
+
+    /* clean up and return */
+    (void)inflateEnd(&strm);
+    return ret == Z_STREAM_END ? Z_OK : Z_DATA_ERROR;
 }
 
 

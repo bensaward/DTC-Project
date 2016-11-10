@@ -35,7 +35,7 @@ void getheader(FILE *image, int *retvalue); // lets find the IDHR of our png fil
 void findwell(/* args */); // use circular edge detection to find the well plates
 void greyscaleimage(pixel **image); /* for this we need our image in grey scale */
 void swaplocations(char *array); // swap our big endian number to a little endian number
-void idatread(FILE *image, char *array); //read a block of the idat
+void idatread(FILE *image, char *array, int *length, int *array_len); //read a block of the idat
 //END FUNCTION DEFS
 
 void getheader(FILE *image, int *retvalue) //return x, y dimensions if this matches what we expect, NULL otherwise
@@ -99,148 +99,115 @@ void swaplocations(char *array)
 	array[2]=temp;
 }
 
-void idatread(FILE *image, char *array)
+void idatread(FILE *image, char *array, int *length, int *array_len) //pass back some of the chunk as an array
 {
-    // we need to collect the 4 bytes before IDAT to see its length
-    int i=0;
+    int i=0; int x=0;
     char *IDAT="IDAT";
     char *buff=malloc(sizeof(char)*41);
-    char *holder=malloc(sizeof(char)*4);
-    int overruncounter=0;
+    char *tempholder=malloc(sizeof(char)*4);
+    int overruncounter=0; //count how far into the IDAT buffer we ran and hold those bytes
     int movedforward=0;
     fgets(buff, 40, image);
     int endofstring=0;
     printf("Passing into idatread\n");
-    while (strstr(buff, IDAT) == NULL)
+    for (i=0; i<40; i++)
     {
-        printf("strstr didnt detect IDAT\n");
-        printf("buffer = %s\n", buff);
+        printf("byte %d is 0x%x (%c)\n", i, buff[i], buff[i]);
+        if (buff[i]=='I')
+        {
+            printf("found 'I' at pos %d", i);
 
-        while(buff[0]=='\0') // deal with nulls again loop1
-        {
-            buff+=sizeof(char);
-            movedforward++;
-            printf("jumped forward! now on %d\n", movedforward);
-            printf("buffer after 1 = %s\n", buff);
-            //if (movedforward > 40)
-            //{
-             //   break;
-            //}
-        }
-        if (strstr(buff, IDAT) != NULL)//here we know the string doesnt begin with \0
-        {
-            break;
-        }
-        else
-        {
-             printf("strstr didnt detect IDAT\n");
-            for (i=0; i<(41-movedforward); i++) //loop2
+
+            if ((i+1)<40)
             {
-                if (buff[i]=='\0') //jump to our next series of null,
-                    //trying to catch a match with \0asjds\0hfjsf\0\0\0IDAT for eg
+                if (buff[i+1]=='D') //just match ID
                 {
-                    endofstring=i;
-                    break;
+                    switch (i)
+                    {
+                        case 0:
+                        {
+                            for (x=0; x<4; x++)
+                            {
+                                endian.asstring[x]=tempholder[x];
+                            }
+                            break;
+                        }
+                        case 1:
+                        {
+                            for (x=0; x<3; x++)
+                            {
+                                endian.asstring[x]=tempholder[x];
+                            }
+                            endian.asstring[3]=buff[0];
+                            break;
+                        }
+                        case 2:
+                        {
+                            endian.asstring[0]=tempholder[2];
+                            endian.asstring[1]=tempholder[3];
+                            endian.asstring[2]=buff[0];
+                            endian.asstring[3]=buff[1];
+                            break;
+                        }
+                        case 3:
+                        {
+                            endian.asstring[0]=tempholder[3];
+                            endian.asstring[1]=buff[0];
+                            endian.asstring[2]=buff[1];
+                            endian.asstring[3]=buff[2];
+                            break;
+                        }
+                        default:
+                        {
+
+                            endian.asstring[0]=buff[i-4];
+                            endian.asstring[1]=buff[i-3];
+                            endian.asstring[2]=buff[i-2];
+                            endian.asstring[3]=buff[i-1];
+                        }
+                    }
+                    overruncounter=40-i;
+                    if (overruncounter>0)
+                    {
+                        char *IDATCHUNK=malloc(sizeof(char)*overruncounter);
+                        *array_len=overruncounter;
+                        for (x=0; x<overruncounter; x++)
+                        {
+                            IDATCHUNK[x]=buff[i+4+x];
+                        }
+                        strcpy(array, IDATCHUNK);
+                    }
+
                 }
-            }
-            if ((endofstring+movedforward)<36)
-            {
-                printf("storing values before we skip\n");
-                holder[0]=buff[endofstring+movedforward-3];
-                holder[1]=buff[endofstring+movedforward-2];
-                holder[2]=buff[endofstring+movedforward-1];
-                holder[3]=buff[endofstring+movedforward];
-                printf("moved along %d bytes\n", endofstring+movedforward);
-                buff+=(sizeof(char)*endofstring);
-                printf("buffer after loop 2 = %s\n", buff);
-                movedforward+=endofstring;
             }
             else
             {
-                        printf("storing last 4 values\n");
-                        holder[0]=buff[36-movedforward];
-                        holder[1]=buff[37-movedforward];
-                        holder[2]=buff[38-movedforward];
-                        holder[3]=buff[39-movedforward];
-                        for (i=1; i<4; i++) // check if we have part of the IDAT header
-                        {
-                            if (holder[i]=='I')
-                            {
-                                char nextchar=fgetc(image);
-                                if (nextchar==IDAT[4-i])
-                                {
-                                    endian.asstring[0]=buff[36-movedforward-(4-i)]; //store the length in little endian format
-                                    endian.asstring[1]=buff[37-movedforward-(4-i)];
-                                    endian.asstring[2]=buff[38-movedforward-(4-i)];
-                                    endian.asstring[3]=buff[39-movedforward-(4-i)];
-                                    break;
-
-                                }
-                            }
-                        }
-                        fgets(buff, 40, image);
-                        printf("getting more from file");
-                        endofstring=0;
-                        movedforward=0;
+                char nextchar=fgetc(image);
+                if (nextchar=='D')
+                {
+                    endian.asstring[0]=buff[i-4];
+                    endian.asstring[1]=buff[i-3];
+                    endian.asstring[2]=buff[i-2];
+                    endian.asstring[3]=buff[i-1];
+                }
             }
+            swaplocations(endian.asstring);
+            length=&(endian.asnumber);
+           // printf("Length of IDAT CHUNK is %d\n", *length);
+            break;
         }
-        //if (strstr(buff, "IDAT") != NULL)
-        //{
-          //  break;
-        //}
-        printf("Press enter to cycle through again!\n");
-        getchar();
 
-    }
-    char *startofstring=&buff[0];
-    char *IDAT_LOC=strstr(buff, IDAT);
-    if (IDAT_LOC < startofstring+4)
-    {
-        switch(IDAT_LOC-startofstring)
+        if (i==39 && buff[39]!='I') //save the last 4 bytes in case the first 4 characters are the start of IDAT
         {
-            case 0:
-                {
-                    endian.asstring[0]=holder[0];
-                    endian.asstring[1]=holder[1];
-                    endian.asstring[2]=holder[2];
-                    endian.asstring[3]=holder[3];
-                    break;
-                }
-            case 1:
-                {
-                    endian.asstring[0]=holder[1];
-                    endian.asstring[1]=holder[2];
-                    endian.asstring[2]=holder[3];
-                    endian.asstring[3]=buff[0];
-                    break;
-                }
-            case 2:
-                {
-                    endian.asstring[0]=holder[2];
-                    endian.asstring[1]=holder[3];
-                    endian.asstring[2]=buff[0];
-                    endian.asstring[3]=buff[1];
-                    break;
-                }
-            case 3:
-                {
-                    endian.asstring[0]=holder[3];
-                    endian.asstring[1]=buff[0];
-                    endian.asstring[2]=buff[1];
-                    endian.asstring[3]=buff[2];
-                    break;
-                }
+            tempholder[0]=buff[36];
+            tempholder[1]=buff[37];
+            tempholder[2]=buff[38];
+            tempholder[3]=buff[39];
+            i=0;
+            fgets(buff, 40, image);
         }
     }
-    else
-    {
-        for (i=0; i<4; i++)
-        {
-                endian.asstring[i]=*(IDAT_LOC-(sizeof(char)*4)+i);
-        }
-    }
- //   overruncounter=IDAT_LOC-startofstring;
- //   printf("overruncounter = %d", overruncounter);
 }
+
 
 #endif

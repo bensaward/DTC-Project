@@ -23,9 +23,10 @@ int main (int argc, char **argv)
 		return -1;
 	}
 	int dimensions[4];
+	int *firstidatlength, *array_len;
 	getheader(image, dimensions);
 	printf("x = %d, y = %d, depth = %d, mode = %d\n", dimensions[0], dimensions[1], dimensions[2], dimensions[3]);
 	// READ FILE UNTIL WE FIND IDAT
-    idatread(image, array);
+    idatread(image, array, firstidatlength, array_len);
 	return 0;
 }

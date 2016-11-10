@@ -33,14 +33,9 @@ int main (int argc, char **argv)
 	printf("x = %d, y = %d, depth = %d, mode = %d\n", dimensions[0], dimensions[1], dimensions[2], dimensions[3]);
 	// READ FILE UNTIL WE FIND IDAT
     idatread(image, firstidatoverrun, &firstidatlength, &array_len);
-    printf ("IDATlen = %d\n", firstidatlength);
+    /*printf ("IDATlen = %d\n", firstidatlength);
     printf ("array_len = %d\nIDATOVERRUN =", array_len);
-   for (z=0; z<array_len; z++)
-   {
-        printf("0x%X\n", firstidatoverrun[z]);
-   }
-
-    printf("\n");
+    printf("\n"); */
     unsigned char *IDATCHUNK=malloc(sizeof(char)*((firstidatlength))); // dynamically work with our memory
     unsigned char *inflatechunk=malloc(sizeof(char)*((firstidatlength)));
     unsigned char *temp=malloc(sizeof(char)*(firstidatlength-array_len));
@@ -52,12 +47,11 @@ int main (int argc, char **argv)
 
     //read the rest of IDAT chunk leaving off the crc at the end
     fread(temp, 1, (firstidatlength-array_len), image);
-    printf("first byte of IDAT = 0x%X\n", temp[0]);
+
     for (i=0; i<(firstidatlength-array_len); i++)
     {
         IDATCHUNK[i+array_len]=temp[i];
     }
-    printf("i = %d\n", i);
     free(temp);
     // inflate zlib compressed data: stolen from http://www.zlib.net/zlib_how.html
 
@@ -65,7 +59,7 @@ int main (int argc, char **argv)
     pixel pixelarray[dimensions[1]][dimensions[2]];
     bytesread=0; // populate our pixel array with the first IDAT chunk
     y=0;
-    do
+    while (bytesread<firstidatlength)
     {
             for (x=0; x<(dimensions[0]*3); x++)
             {
@@ -73,6 +67,7 @@ int main (int argc, char **argv)
                 {
                 case 0: //red
                     {
+                        //printf("assigned red pixel after %d bytes, x = %d\n", bytesread, x);
                         pixelarray[y][x/3].red=inflatechunk[bytesread];
                         bytesread+=1;
                         break;
@@ -94,7 +89,7 @@ int main (int argc, char **argv)
             }
            if(bytesread<firstidatlength) {y+=1;}
     }
-    while (bytesread<firstidatlength);
+
     printf("first IDAT stored\n");
     // grab the rest of the IDAT chunks but skip over the 4 byte crc. Grab the length and compare it against 0x8000
     char discarded;
@@ -110,14 +105,21 @@ int main (int argc, char **argv)
         {
             endian.asstring[i]=fgetc(image);
         }
+         for (i=0; i<4; i++) //skip over IDAT
+        {
+            discarded=fgetc(image);
+            printf("discarded = %c (0x%X)\n", discarded, discarded);
+        }
         swaplocations(endian.asstring); //length to little endian format
         printf("nth chunk is %d long\n", endian.asnumber);
         if (endian.asnumber==firstidatlength)//is the next IDAT 0x8000 long? ie the maximum?
         {
-            printf("IDAT 2 is the same length as IDAT 1\n");
+            printf("IDAT n is the same length as IDAT 1\n");
             bytesread=0;
+
             fread(IDATCHUNK, 1, firstidatlength, image); // get the next IDAT chunk
             success=inflate_mod(IDATCHUNK, firstidatlength, inflatechunk, firstidatlength);
+            printf("x = %d, y = %d\n", x, y);
             while (bytesread<firstidatlength) // populate the next part of the array
             {
                 while (x<(dimensions[0]*3)) // our x and y is saved from last time
@@ -126,6 +128,7 @@ int main (int argc, char **argv)
                     {
                         case 0: //red
                         {
+                           // printf("assigned red pixel after %d bytes, x = %d\n", bytesread, x);
                             pixelarray[y][x/3].red=inflatechunk[bytesread];
                             bytesread+=1;
                             x+=1;
@@ -146,11 +149,12 @@ int main (int argc, char **argv)
                             break;
                         }
                     }
-                    if (bytesread>=firstidatlength) {break;}
+                    if (bytesread>=firstidatlength) { break;}
+                   // if (x/3==(dimensions[0])) {printf("im breaking here!\n"); break;}
                 }
-                if(bytesread<firstidatlength) {y+=1;}
+                if(bytesread<=firstidatlength) {y+=1; x=0;}
             }
-            printf("another IDAT processed\n");
+            printf("bytesread = %d\nanother IDAT processed\n", bytesread);
         }
         else // if the IDAT is smaller
         {

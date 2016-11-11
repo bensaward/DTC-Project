@@ -31,6 +31,8 @@ int main (int argc, char **argv)
 	int firstidatlength, array_len;
 	getheader(image, dimensions);
 	printf("x = %d, y = %d, depth = %d, mode = %d\n", dimensions[0], dimensions[1], dimensions[2], dimensions[3]);
+	int image_width=dimensions[0];
+	int image_height=dimensions[1];
 	// READ FILE UNTIL WE FIND IDAT
     idatread(image, firstidatoverrun, &firstidatlength, &array_len);
     /*printf ("IDATlen = %d\n", firstidatlength);
@@ -56,7 +58,13 @@ int main (int argc, char **argv)
     // inflate zlib compressed data: stolen from http://www.zlib.net/zlib_how.html
 
     int success=inflate_mod(IDATCHUNK, firstidatlength, inflatechunk, firstidatlength);
-    pixel pixelarray[dimensions[1]][dimensions[2]];
+    //pixel pixelarray[dimensions[1]][dimensions[2]];
+    pixel **pixelarray=malloc(sizeof(pixel*)*dimensions[1]);
+    int columns=0;
+    for (columns=0; columns<dimensions[1]; columns++)
+    {
+        pixelarray[columns]=malloc(sizeof(pixel)*dimensions[0]);
+    }
     bytesread=0; // populate our pixel array with the first IDAT chunk
     y=0;
     while (bytesread<firstidatlength)
@@ -111,10 +119,10 @@ int main (int argc, char **argv)
           //  printf("discarded = %c (0x%X)\n", discarded, discarded);
         }
         swaplocations(endian.asstring); //length to little endian format
-        printf("nth chunk is %d long\n", endian.asnumber);
+       // printf("nth chunk is %d long\n", endian.asnumber);
         if (endian.asnumber==firstidatlength)//is the next IDAT 0x8000 long? ie the maximum?
         {
-            printf("IDAT n is the same length as IDAT 1\n");
+           // printf("IDAT n is the same length as IDAT 1\n");
             bytesread=0;
 
             fread(IDATCHUNK, 1, firstidatlength, image); // get the next IDAT chunk
@@ -154,7 +162,7 @@ int main (int argc, char **argv)
                 }
                 if(bytesread<=firstidatlength) {y+=1; x=0;}
             }
-            printf("bytesread = %d\nanother IDAT processed\n", bytesread);
+          //  printf("bytesread = %d\nanother IDAT processed\n", bytesread);
         }
         else // if the IDAT is smaller
         {
@@ -203,5 +211,13 @@ int main (int argc, char **argv)
         }
 
     }
+	int max_y_origin, max_x_origin, max_y_corner, max_x_corner;
+	//searchsquare(pixel **array, int x_pos, int width, int y_pos, int height, int *max_x, int *max_y)
+    searchsquare(pixelarray, 5, 50, 5, 50, &max_x_origin, &max_y_origin); //gives approx a 20x20 box around the centre of the top left well
+    printf("found max in top left in %dx%d square at (%d, %d)\n", SCANDIMENSION, SCANDIMENSION, max_x_origin, max_y_origin);
+    //searchsquare(pixelarray, image_width-50, 20, 5, 50, &max_x_corner, &max_y_corner);
+    //printf("found max in top right in 10x10 square at (%d, %d)\n", max_x_corner, max_y_corner);
+	int darksearch=scoresquare(pixelarray, 21, 31);
+	printf("darkest square by eye has sqrwt = %d\n", darksearch);
 	return 0;
 }

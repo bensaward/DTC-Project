@@ -3,7 +3,14 @@ Many issues presented within the project:
 	- binary file with many different specifications
 		- first looked into seeing how the IHDR chunk of the image works
 			- contains crucial information such as width, height and formatting of pixels
-			- do we need to deal with an alpha channel?
+			- do we need to deal with an alpha channel? no we dont for certain png types
 				- IDHR has a fixed length, find where it resides in the image and then seek to it? (http://www.libpng.org/pub/png/spec/1.2/PNG-Chunks.html)
-			- encountered problems with reading directly from binary file because of all the HEX 0x00 (ie \0) characters
-		- how should we represent the pixels? int is the true data type but char can save a lot of RAM!
+			- encountered problems with reading directly from binary file because of all the HEX 0x00 (ie \0) characters. no problem with fread
+		- how should we represent the pixels? int is the true data type but char can save a lot of RAM! represented as 3d matrix
+		
+		how do detection of plates? we are a 96 well plate so we have 12x8
+		random search in top left for most colour dense area
+		do a 30x30 grid and move over (0,60), (0,60)
+		figure out the average pixel value
+		
+		score plates vs average pixels ==> take into account different light across the plate	

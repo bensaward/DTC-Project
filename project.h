@@ -2,6 +2,12 @@
 #define _PROJECT_H
 
 #define CHUNK 16384
+#define SCANDIMENSION 10
+#define SCANSQRD SCANDIMENSION*SCANDIMENSION
+#define magic_constant 0.25
+/*fiddled with this number to get closer to middle of well, poor results with 20x20 and 30x30
+    0.95 forces bottom left of well, light area+shadow, 0.25 gives pretty good results */
+#define magic_constant2 0.1
 typedef struct // use chars to save memory?
 {
 	int red;
@@ -24,7 +30,9 @@ union Endian //our png image is big endian, perhaps our compiler is little endia
 	} endian;
 
 //BEGIN FUNCTION DEFS
-int inf(char *source, char *dest, int size_source); //(FILE *source, FILE *dest) // 11 December 2005  Mark Adler (http://www.zlib.net/zpipe.c)
+int getmagic (pixel ** arr, int x_pos, int width, int y_pos, int height, int mode); //get magic filter values
+void searchsquare(pixel ** arr, int x_pos, int width, int y_pos, int height, int *max_x, int *max_y);
+int scoresquare(pixel ** arr, int x_pos, int y_pos);
 void getheader(FILE *image, int *retvalue); // lets find the IDHR of our png file and read it to get dimensions
 void findwell(/* args */); // use circular edge detection to find the well plates
 void greyscaleimage(pixel **image); /* for this we need our image in grey scale */
@@ -209,71 +217,7 @@ void idatread(FILE *image, char *array, int *length, int *array_len) //pass back
     }
 }
 
-int inf(char *source, char *dest, int size_source) // 11 December 2005  Mark Adler (http://www.zlib.net/zpipe.c)
-{ //modified to take char * args instead of FILE, should be faster this way
-    int i=0;
-    int ret;
-    unsigned have;
-    z_stream strm;
-    unsigned char in[CHUNK];
-    unsigned char out[CHUNK];
 
-    /* allocate inflate state */
-    strm.zalloc = Z_NULL;
-    strm.zfree = Z_NULL;
-    strm.opaque = Z_NULL;
-    strm.avail_in = 0;
-    strm.next_in = Z_NULL;
-    ret = inflateInit(&strm);
-    if (ret != Z_OK)
-        return ret;
-
-    /* decompress until deflate stream ends or end of file */
-    do {
-        /*strm.avail_in = fread(in, 1, CHUNK, source);
-        if (ferror(source)) {
-            (void)inflateEnd(&strm); modified to take char * input instead of FILE
-            return Z_ERRNO;
-        }*/
-        strm.avail_in=size_source;
-       /* for (i=0; i<size_source; i++)
-        {
-             in[i]=source[i]; // take char * instead of FILE
-        } */
-
-        //if (strm.avail_in == 0)
-           // break;
-        strm.next_in = source;
-
-        /* run inflate() on input until output buffer not full */
-        do {
-            strm.avail_out = CHUNK;
-            strm.next_out = out;
-            ret = inflate(&strm, Z_NO_FLUSH);
-            assert(ret != Z_STREAM_ERROR);  /* state not clobbered */
-            switch (ret) {
-            case Z_NEED_DICT:
-                ret = Z_DATA_ERROR;     /* and fall through */
-            case Z_DATA_ERROR:
-            case Z_MEM_ERROR:
-                (void)inflateEnd(&strm);
-                return ret;
-            }
-            /*have = CHUNK - strm.avail_out;
-            if (fwrite(out, 1, have, dest) != have || ferror(dest)) {
-                (void)inflateEnd(&strm);
-                return Z_ERRNO;
-            }*/
-            dest=out;
-        } while (strm.avail_out == 0);
-
-        /* done when inflate() says it's done */
-    } while (ret != Z_STREAM_END);
-
-    /* clean up and return */
-    (void)inflateEnd(&strm);
-    return ret == Z_STREAM_END ? Z_OK : Z_DATA_ERROR;
-}
 int inflate_mod(const void *src, int srcLen, void *dst, int dstLen) { //stolen from stackoverflow
     //URL = http://stackoverflow.com/questions/4901842/in-memory-decompression-with-zlib
     z_stream strm  = {0};
@@ -309,4 +253,95 @@ int inflate_mod(const void *src, int srcLen, void *dst, int dstLen) { //stolen f
     return ret;
 }
 
+int scoresquare(pixel ** arr, int x_pos, int y_pos) //score a SCANDIMENSION x SCANDIMENSION square
+{
+    float pixelweight=0;
+    int y, x;
+    for (y=0; y<SCANDIMENSION; y++)
+    {
+        for (x=0; x<SCANDIMENSION; x++) //greyscale weighting = 0.21 R + 0.72 G + 0.07 B (use equal weighting since pc is interpreting values)
+        {
+            pixelweight+=((arr[y_pos+y][x_pos+x].red+arr[y_pos+y][x_pos+x].green+arr[y_pos+y][x_pos+x].blue)/3);
+            //pixelweight+=(0.21*arr[y_pos+y][x_pos+x].red)+(0.72*arr[y_pos+y][x_pos+x].green)+(0.07*arr[y_pos+y][x_pos+x].blue);
+        }
+    }
+    return (int)pixelweight; // truncate
+}
+
+void searchsquare(pixel ** arr, int x_pos, int width, int y_pos, int height, int *max_x, int *max_y) //self written "random" (logical) search
+{
+    int x=0, y=0, hi_x=x_pos, hi_y=y_pos, holder=100000000, sqrwt;
+    int magic_threshold=getmagic(arr, x_pos, width, y_pos, height,0);
+    int magic_pass=getmagic(arr, x_pos, width, y_pos, height,1);
+    for (y=0; y<height; y++)
+    {
+        for(x=0; x<width; x++)
+        {
+            sqrwt=scoresquare(arr, x_pos+x, y_pos+y);
+           //
+            if ((sqrwt<holder && sqrwt>magic_threshold) && sqrwt<magic_pass /*do i need?*/) //threshold out darkest values to avoid matching shadows and cutoff lightest squares
+            {
+                holder=sqrwt;
+                hi_x=x_pos+x;
+                hi_y=y_pos+y;
+            }
+        }
+    }
+    printf("lowest sqrwt = %d\nmagic_threshold = %d\n", sqrwt, magic_threshold);
+    /*for (y=0; y<5; y++) //print 4x4 of RGB bytes in hex for debug vs GIMP
+    {
+        for(x=0; x<5; x++)
+        {
+            printf("byte at %d,%d = RGB(%d, %d, %d)\n", (hi_x+x), (hi_y+y), arr[hi_y+y][hi_x+y].red, arr[hi_y+y][hi_x+y].green, arr[hi_y+y][hi_x+y].blue);
+        }
+    } */
+    *max_x=hi_x;
+    *max_y=hi_y;
+}
+
+int getmagic (pixel ** arr, int x_pos, int width, int y_pos, int height, int mode) /*get our threshold and cutoff for filtering
+mode 0: return threshold magic, mode 1: return cutoff magic */
+{
+    int x,y,numpixels=0;
+    float total=0;
+
+    float minval=255; //seed min and max as max and min respectively
+    float maxval=0;
+    float temp;
+    for (y=0; y<height; y++)
+    {
+        for (x=0; x<width; x++)
+        {
+            temp=(arr[y_pos+y][x_pos+x].red+arr[y_pos+y][x_pos+x].green+arr[y_pos+y][x_pos+x].blue)/3;
+           // temp=(0.21*arr[y_pos+y][x_pos+x].red)+(0.72*arr[y_pos+y][x_pos+x].green)+(0.07*arr[y_pos+y][x_pos+x].blue); //weight average?
+            total+=temp;
+            numpixels++;
+            if (temp < minval && temp > 50) //avoid picking up the odd completely black pixel, only the really grey ones (fudge factor)
+            {
+                minval=temp; // this is 0 if there is a black pixel
+            }
+            if (temp > maxval && temp < 240) //avoid picking up the really light pixels
+            {
+                maxval=temp;
+            }
+        }
+    }
+    int average=(total/numpixels);
+   /* printf("darkest possible sqrwt = %f\n", minval*SCANSQRD);
+    printf("average sqrwt = %d\n", average*SCANSQRD);
+    printf("lightest sqrwt = %d\n", maxval*SCANSQRD); */
+    int ret;
+    if (mode==0)
+    {
+        ret=(int)SCANSQRD*(minval+magic_constant*(average-minval));
+      //  printf("sqrwt > %d\n", ret);
+    }
+    else
+    {
+        ret=(int)SCANSQRD*(average-(magic_constant2*(average-minval)));
+    //    printf("sqrwt < %d\n", ret);
+    }
+
+    return ret;
+}
 #endif

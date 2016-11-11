@@ -47,7 +47,6 @@ int main (int argc, char **argv)
         IDATCHUNK[i]=firstidatoverrun[i];
     }
 
-    //idatcount++;
     //read the rest of IDAT chunk leaving off the crc at the end
     fread(temp, 1, (firstidatlength-array_len), image);
 
@@ -57,11 +56,7 @@ int main (int argc, char **argv)
     }
     free(temp);
 
-   // int success=inflate_mod(IDATCHUNK, firstidatlength, inflatechunk, firstidatlength);
-    //printf("number of bytes inflated = %d\n", success);
-   // idatcount++;
-    //pixel pixelarray[dimensions[1]][dimensions[2]];
-    for (i=0; i<firstidatlength; i++)
+    for (i=0; i<(firstidatlength); i++) //-4 to cut the trailing DEFLATE checksum (apparently separate to the CRC)
     {
         idatstream[i]=IDATCHUNK[i];
         idatstreamcount++;
@@ -137,47 +132,12 @@ int main (int argc, char **argv)
             //success=inflate_mod(IDATCHUNK, firstidatlength, inflatechunk, firstidatlength);
             //idatcount++;
             //printf("number of bytes inflated = %d\n", success);
-            for (idatcounter=0; idatcounter<firstidatlength; idatcounter++)
+            for (idatcounter=0; idatcounter<(firstidatlength); idatcounter++)
             {
                 idatstream[idatcounter+idatstreamcount]=IDATCHUNK[idatcounter];
             }
-            idatstreamcount+=firstidatlength;
+            idatstreamcount+=(firstidatlength);
 
-         /*   while (bytesread<firstidatlength) // populate the next part of the array
-            {
-                while (x<(dimensions[0]*3)) // our x and y is saved from last time
-                {
-                     switch (bytesread%3)
-                    {
-                        case 0: //red
-                        {
-                           // printf("assigned red pixel after %d bytes, x = %d\n", bytesread, x);
-                            pixelarray[y][x/3].red=inflatechunk[bytesread];
-                            bytesread+=1;
-                            x+=1;
-                            break;
-                        }
-                        case 1: //green
-                        {
-                            pixelarray[y][x/3].green=inflatechunk[bytesread];
-                            bytesread+=1;
-                            x+=1;
-                            break;
-                        }
-                        case 2: //blue
-                        {
-                            pixelarray[y][x/3].blue=inflatechunk[bytesread];
-                            bytesread+=1;
-                            x+=1;
-                            break;
-                        }
-                    }
-                    if (bytesread>=firstidatlength) { break;}
-                   // if (x/3==(dimensions[0])) {printf("im breaking here!\n"); break;}
-                }
-                if(bytesread<=firstidatlength) {y+=1; x=0;}
-            }
-          //  printf("bytesread = %d\nanother IDAT processed\n", bytesread); */
         }
         else // if the IDAT is smaller
         {
@@ -189,43 +149,12 @@ int main (int argc, char **argv)
             fread(lastidat, 1, endian.asnumber, image); // get the next IDAT chunk
             //success=inflate_mod(IDATCHUNK, endian.asnumber, inflatechunk, endian.asnumber);
            // idatcount++;
-            for (idatcounter=0; idatcounter<endian.asnumber; idatcounter++)
+            for (idatcounter=0; idatcounter<(endian.asnumber); idatcounter++)
             {
                 idatstream[idatcounter+idatstreamcount]=lastidat[idatcounter];
             }
-            idatstreamcount+=endian.asnumber;
-           /* while (bytesread<endian.asnumber) // populate the next part of the array
-            {
-                while (x<(dimensions[0]*3)) // our x and y is saved from last time
-                {
-                     switch (bytesread%3)
-                    {
-                        case 0: //red
-                        {
-                            pixelarray[y][x/3].red=inflatechunk[bytesread];
-                            bytesread+=1;
-                            x+=1;
-                            break;
-                        }
-                        case 1: //green
-                        {
-                            pixelarray[y][x/3].green=inflatechunk[bytesread];
-                            bytesread+=1;
-                            x+=1;
-                            break;
-                        }
-                        case 2: //blue
-                        {
-                            pixelarray[y][x/3].blue=inflatechunk[bytesread];
-                            bytesread+=1;
-                            x+=1;
-                            break;
-                        }
-                    }
-                    if (bytesread>=firstidatlength) {break;}
-                }
-                if(bytesread<firstidatlength) {y+=1; x=0;}
-            }*/
+            idatstreamcount+=(endian.asnumber);
+
             free(lastidat);
              //done garbage collection
             break;
@@ -235,7 +164,7 @@ int main (int argc, char **argv)
     idatstream=idatstream+2; // move over the header of the DEFLATE compressed data
     idatstreamcount=idatstreamcount-2;
     char *IDATSTR=malloc(sizeof(char)*idatstreamcount); //dynamic memory assignment for zlib decompression
-    for (idatcounter=0; idatcounter<idatstreamcount; idatcounter++)
+    for (idatcounter=0; idatcounter<(idatstreamcount-4); idatcounter++)
     {
         IDATSTR[idatcounter]=idatstream[idatcounter];
     }
@@ -248,23 +177,97 @@ int main (int argc, char **argv)
 
     //printf("idatstreamcount = %d\nsizeof(inflatechunk) = %d\n", idatstreamcount, firstidatlength*25);
     //int success=inflate_mod(idatstream, idatstreamcount, inflatechunk, idatstreamcount);
-	int success=inflate_mod(IDATSTR, idatstreamcount, inflatechunk, idatstreamcount);
-
-	//int max_y_origin, max_x_origin, max_y_corner, max_x_corner;
-    int dbgprint;
-    //printf("idatcount = %d\n", idatcount);
-    FILE *outfile=fopen("hex.dump", "wb");
-    fwrite(IDATSTR, 1, idatstreamcount, outfile);
-    fclose(outfile);
-    for (dbgprint=0; dbgprint<10; dbgprint++)
+	int success=inflate_mod(IDATSTR, idatstreamcount, inflatechunk, idatstreamcount); // we now have a filtered data stream
+    free(IDATSTR);
+    bytesread=0;
+    char *templine=malloc((image_width*3)+1);
+    char *nextscanline=malloc((image_width*3)+1);
+    for (i=0; i<(image_width*3)+1; i++)
     {
-        printf("inflate chunk byte (%d) = 0x%X\n", dbgprint, inflatechunk[dbgprint]);
-      //printf("pixel 1,%d = rgb(%d,%d,%d)\n", dbgprint, pixelarray[0][dbgprint].red, pixelarray[0][dbgprint].green, pixelarray[0][dbgprint].blue);
+        nextscanline[i]=inflatechunk[i];
+        bytesread++;
     }
+    int iterations=0;
+    while (bytesread < idatstreamcount)
+    {
+        switch (nextscanline[0])
+        {
+        case 0: // #nofilter
+        {
+            break;
+        }
+        case 1: // sub filtering
+            {
+                printf("sub filtering used for scanline %d\n", iterations);
+                for (i=4; i<(image_width*3)+1; i++)
+                {
+                    nextscanline[i]=(nextscanline[i]+nextscanline[i-3])%256; //all filters are mod 256
+                }
+                break;
+            }
+        case 2: //up
+            {
+                for(i=1; i<(image_width*3)+1; i++)
+                {
+                    nextscanline[i]=(nextscanline[i]+templine[i])%256;
+                }
+                break;
+            }
+        case 3: // average left and above
+            {
+                for (i=4; i<(image_width*3)+1; i++)
+                {
+                    nextscanline[i]=(nextscanline[i]+(nextscanline[i-3]+templine[i])/2)%256;
+                }
+                break;
+            }
+        case 4: // Paeth (EVIL!) https://www.w3.org/TR/PNG-Filters.html
+            {
+                int predictor, pa, pb, pc;
+                for (i=4; i<(image_width*3)+1; i++)
+                {
+                    predictor=(nextscanline[i-3]+templine[i]-templine[i-3]);
+                    pa=abs(predictor-nextscanline[i-3]);
+                    pb=abs(predictor-templine[i]);
+                    pc=abs(predictor-templine[i-3]);
+                    if (pa<=pb && pa<=pc)
+                    {
+                        nextscanline[i]=(nextscanline[i]+nextscanline[i-3])%256;
+                    }
+                    else if (pb<=pc)
+                    {
+                        nextscanline[i]=(nextscanline[i]+templine[i])%256;
+                    }
+                    else
+                    {
+                        nextscanline[i]=(nextscanline[i]+templine[i-3])%256;
+                    }
+                }
+                break;
+            }
+        }
+        for (i=0; i<(image_width*3)+1; i++)
+        {
+            inflatechunk[(iterations*((image_width*3)+1))+i]=nextscanline[i];
+            templine[i]=nextscanline[i];
+            nextscanline[i]=inflatechunk[i+bytesread];
+
+        }
+        bytesread+=(image_width*3)+1;
+        iterations+=1;
+    }
+	//int max_y_origin, max_x_origin, max_y_corner, max_x_corner;
+    /*int dbgprint;
+    //printf("idatcount = %d\n", idatcount);
+    */
+    /*FILE *outfile=fopen("scanlines.dump", "wb");
+    fwrite(inflatechunk, 1, idatstreamcount, outfile);
+    fclose(outfile);
     /*success=inflate_mod(inflatechunk, idatstreamcount, IDATSTR, idatstreamcount);
     outfile=fopen("hex-2.dump", "wb");
     fwrite(inflatechunk, 1, idatstreamcount, outfile);
     fclose(outfile);*/
+
 	//searchsquare(pixel **array, int x_pos, int width, int y_pos, int height, int *max_x, int *max_y)
    // searchsquare(pixelarray, 5, 50, 5, 50, &max_x_origin, &max_y_origin); //gives approx a 20x20 box around the centre of the top left well
     //printf("found max in top left in %dx%d square at (%d, %d)\n", SCANDIMENSION, SCANDIMENSION, max_x_origin, max_y_origin);

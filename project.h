@@ -233,14 +233,17 @@ int inflate_mod(const void *src, int srcLen, void *dst, int dstLen) { //stolen f
     int err = -1;
     int ret = -1;
 
-    err = inflateInit2(&strm, (15 + 32)); //15 window bits, and the +32 tells zlib to to detect if using gzip or zlib
+    err = inflateInit2(&strm, -MAX_WBITS/*15 + 32*/); //15 window bits, and the +32 tells zlib to to detect if using gzip or zlib
+    printf("err after inflateinit2 = %d\n", err);
     if (err == Z_OK) {
         err = inflate(&strm, Z_FINISH);
+        printf("err after inflate = %d\n", err);
         if (err == Z_STREAM_END) {
             ret = strm.total_out;
         }
         else {
              inflateEnd(&strm);
+             printf("err after inflateEnd = %d\n", err);
              return err;
         }
     }

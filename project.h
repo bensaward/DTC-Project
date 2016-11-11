@@ -282,7 +282,7 @@ void searchsquare(pixel ** arr, int x_pos, int width, int y_pos, int height, int
         {
             sqrwt=scoresquare(arr, x_pos+x, y_pos+y);
            //
-            if ((sqrwt<holder && sqrwt>magic_threshold) && sqrwt<magic_pass /*do i need?*/) //threshold out darkest values to avoid matching shadows and cutoff lightest squares
+            if ((sqrwt<holder && sqrwt>magic_threshold) /*&& sqrwt<magic_pass /*do i need?*/) //threshold out darkest values to avoid matching shadows and cutoff lightest squares
             {
                 holder=sqrwt;
                 hi_x=x_pos+x;
@@ -291,13 +291,13 @@ void searchsquare(pixel ** arr, int x_pos, int width, int y_pos, int height, int
         }
     }
     printf("lowest sqrwt = %d\nmagic_threshold = %d\n", sqrwt, magic_threshold);
-    /*for (y=0; y<5; y++) //print 4x4 of RGB bytes in hex for debug vs GIMP
+    for (y=0; y<5; y++) //print 4x4 of RGB bytes in hex for debug vs GIMP
     {
         for(x=0; x<5; x++)
         {
             printf("byte at %d,%d = RGB(%d, %d, %d)\n", (hi_x+x), (hi_y+y), arr[hi_y+y][hi_x+y].red, arr[hi_y+y][hi_x+y].green, arr[hi_y+y][hi_x+y].blue);
         }
-    } */
+    }
     *max_x=hi_x;
     *max_y=hi_y;
 }

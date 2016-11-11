@@ -67,40 +67,7 @@ int main (int argc, char **argv)
     {
         pixelarray[columns]=malloc(sizeof(pixel)*dimensions[0]);
     }
-    bytesread=0; // populate our pixel array with the first IDAT chunk
-    y=0;
-  /*  while (bytesread<firstidatlength)
-    {
-            for (x=0; x<(dimensions[0]*3); x++)
-            {
-                switch (bytesread%3)
-                {
-                case 0: //red
-                    {
-                        //printf("assigned red pixel after %d bytes, x = %d\n", bytesread, x);
-                        pixelarray[y][x/3].red=inflatechunk[bytesread];
-                        bytesread+=1;
-                        break;
-                    }
-                case 1: //green
-                    {
-                        pixelarray[y][x/3].green=inflatechunk[bytesread];
-                        bytesread+=1;
-                        break;
-                    }
-                case 2: //blue
-                    {
-                        pixelarray[y][x/3].blue=inflatechunk[bytesread];
-                        bytesread+=1;
-                        break;
-                    }
-                }
-                if (bytesread>=firstidatlength) {break;}
-            }
-           if(bytesread<firstidatlength) {y+=1;}
-    }
-    */
-    //printf("first IDAT stored\n");
+
     // grab the rest of the IDAT chunks but skip over the 4 byte crc. Grab the length and compare it against 0x8000
     char discarded;
     int idatcounter=0;
@@ -162,9 +129,9 @@ int main (int argc, char **argv)
 
     }
     idatstream=idatstream+2; // move over the header of the DEFLATE compressed data
-    idatstreamcount=idatstreamcount-2;
+    idatstreamcount=idatstreamcount-6;
     char *IDATSTR=malloc(sizeof(char)*idatstreamcount); //dynamic memory assignment for zlib decompression
-    for (idatcounter=0; idatcounter<(idatstreamcount-4); idatcounter++)
+    for (idatcounter=0; idatcounter<(idatstreamcount); idatcounter++)
     {
         IDATSTR[idatcounter]=idatstream[idatcounter];
     }
@@ -173,7 +140,7 @@ int main (int argc, char **argv)
     idatstream=idatstream-2;
     free(idatstream); // free up some much needed memory
     //printf("idatstream free!\n");
-    char *inflatechunk=malloc(sizeof(char)*idatstreamcount);
+    char *inflatechunk=malloc(sizeof(char)*((image_width*3)+1)*image_height);
 
     //printf("idatstreamcount = %d\nsizeof(inflatechunk) = %d\n", idatstreamcount, firstidatlength*25);
     //int success=inflate_mod(idatstream, idatstreamcount, inflatechunk, idatstreamcount);
@@ -187,6 +154,8 @@ int main (int argc, char **argv)
         nextscanline[i]=inflatechunk[i];
         bytesread++;
     }
+    int linelength=bytesread;
+    printf("bytesread = %d\n", bytesread);
     int iterations=0;
     while (bytesread < idatstreamcount)
     {
@@ -198,8 +167,8 @@ int main (int argc, char **argv)
         }
         case 1: // sub filtering
             {
-                printf("sub filtering used for scanline %d\n", iterations);
-                for (i=4; i<(image_width*3)+1; i++)
+             //   printf("sub filtering used for scanline %d\n", iterations);
+                for (i=4; i<linelength; i++)
                 {
                     nextscanline[i]=(nextscanline[i]+nextscanline[i-3])%256; //all filters are mod 256
                 }
@@ -207,7 +176,7 @@ int main (int argc, char **argv)
             }
         case 2: //up
             {
-                for(i=1; i<(image_width*3)+1; i++)
+                for(i=1; i<linelength; i++)
                 {
                     nextscanline[i]=(nextscanline[i]+templine[i])%256;
                 }
@@ -215,7 +184,7 @@ int main (int argc, char **argv)
             }
         case 3: // average left and above
             {
-                for (i=4; i<(image_width*3)+1; i++)
+                for (i=4; i<linelength; i++)
                 {
                     nextscanline[i]=(nextscanline[i]+(nextscanline[i-3]+templine[i])/2)%256;
                 }
@@ -223,8 +192,9 @@ int main (int argc, char **argv)
             }
         case 4: // Paeth (EVIL!) https://www.w3.org/TR/PNG-Filters.html
             {
+                //printf("WARN : paeth scanline : %d\n", iterations);
                 int predictor, pa, pb, pc;
-                for (i=4; i<(image_width*3)+1; i++)
+                for (i=4; i<linelength; i++)
                 {
                     predictor=(nextscanline[i-3]+templine[i]-templine[i-3]);
                     pa=abs(predictor-nextscanline[i-3]);
@@ -246,31 +216,67 @@ int main (int argc, char **argv)
                 break;
             }
         }
-        for (i=0; i<(image_width*3)+1; i++)
+        bytesread+=linelength;
+        if (bytesread < idatstreamcount)
         {
-            inflatechunk[(iterations*((image_width*3)+1))+i]=nextscanline[i];
-            templine[i]=nextscanline[i];
-            nextscanline[i]=inflatechunk[i+bytesread];
-
+            for (i=0; i<linelength; i++)
+            {
+                inflatechunk[(iterations*linelength)+i]=nextscanline[i];
+                templine[i]=nextscanline[i];
+                nextscanline[i]=inflatechunk[i+bytesread];
+            }
+             iterations+=1;
         }
-        bytesread+=(image_width*3)+1;
-        iterations+=1;
+        else
+        {
+         // printf("bytesread=%d, idatstreamcount=%d\n", bytesread, idatstreamcount);
+            for (i=0; i<linelength; i++)
+            {
+               // printf("bytesread=%d, idatstreamcount=%d\n", (iterations*linelength)+i, idatstreamcount);
+                inflatechunk[(iterations*linelength)+i]=nextscanline[i];
+            }
+            break;
+        }
+
     }
-	//int max_y_origin, max_x_origin, max_y_corner, max_x_corner;
-    /*int dbgprint;
-    //printf("idatcount = %d\n", idatcount);
-    */
-    /*FILE *outfile=fopen("scanlines.dump", "wb");
+
+    FILE *outfile=fopen("scanlines.dump.hex", "wb");
     fwrite(inflatechunk, 1, idatstreamcount, outfile);
     fclose(outfile);
-    /*success=inflate_mod(inflatechunk, idatstreamcount, IDATSTR, idatstreamcount);
-    outfile=fopen("hex-2.dump", "wb");
-    fwrite(inflatechunk, 1, idatstreamcount, outfile);
-    fclose(outfile);*/
+	for (y=0; y<image_height; y++)
+    {
+        bytesread=0;
+        //printf("skipping byte 0x%X\n", inflatechunk[bytesread]);
+        bytesread=1; //time to populate the array! set to 1 to skip over the filter byte
+        for(x=0; x<(image_width*3); x++)
+        {
+            switch (x%3)
+            {
+            case 0:
+                {
+                    pixelarray[y][(x)/3].red=inflatechunk[(y*(image_width*3))+bytesread];
+                    break;
+                }
+            case 1:
+                {
+                    pixelarray[y][x/3].green=inflatechunk[(y*(image_width*3))+bytesread];
+                    break;
+                }
+            case 2:
+                {
+                    pixelarray[y][x/3].blue=inflatechunk[(y*(image_width*3))+bytesread];
+                    break;
+                }
+            }
+            bytesread+=1;
+        }
+      //  printf("y = %d, y_max= %d, bytesread = %d\n", y, image_height, bytesread);
+    }
 
-	//searchsquare(pixel **array, int x_pos, int width, int y_pos, int height, int *max_x, int *max_y)
-   // searchsquare(pixelarray, 5, 50, 5, 50, &max_x_origin, &max_y_origin); //gives approx a 20x20 box around the centre of the top left well
-    //printf("found max in top left in %dx%d square at (%d, %d)\n", SCANDIMENSION, SCANDIMENSION, max_x_origin, max_y_origin);
+
+    int max_x_origin, max_y_origin;
+    searchsquare(pixelarray, 5, 50, 5, 50, &max_x_origin, &max_y_origin); //gives approx a 20x20 box around the centre of the top left well
+    printf("found max in top left in %dx%d square at (%d, %d)\n", SCANDIMENSION, SCANDIMENSION, max_x_origin, max_y_origin);
     //searchsquare(pixelarray, image_width-50, 20, 5, 50, &max_x_corner, &max_y_corner);
     //printf("found max in top right in 10x10 square at (%d, %d)\n", max_x_corner, max_y_corner);
 	//int darksearch=scoresquare(pixelarray, 21, 31);
